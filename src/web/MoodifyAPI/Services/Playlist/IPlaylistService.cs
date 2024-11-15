@@ -2,6 +2,6 @@
 {
     public interface IPlaylistService
     {
-        List<string> GetPlaylistByMood(string moodOrActivity);
+        Task<string> GetPlaylistByMood(string moodOrActivity);
     }
 }

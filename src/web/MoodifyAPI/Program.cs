@@ -1,4 +1,5 @@
 using MoodifyAPI.Services.Playlist;
+using OpenAI.Chat;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IPlaylistService, PlaylistService>();
+builder.Services.AddSingleton(new ChatClient(model: "gpt-4o-mini", builder.Configuration.GetValue<string>("OpenAIKey")));
 
 var app = builder.Build();
 

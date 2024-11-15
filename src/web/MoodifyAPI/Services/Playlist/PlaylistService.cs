@@ -1,23 +1,52 @@
 ﻿
+using MoodifyAPI.Contracts.Helpers;
+using OpenAI.Chat;
+using System.Text;
+
 namespace MoodifyAPI.Services.Playlist
 {
-    public class PlaylistService : IPlaylistService
+    public class PlaylistService(ChatClient client) : IPlaylistService
     {
-        public List<string> GetPlaylistByMood(string moodOrActivity)
+        public async Task<string> GetPlaylistByMood(string moodOrActivity)
         {
-            var playlists = new Dictionary<string, List<string>>
+            ArgumentNullException.ThrowIfNull(nameof(moodOrActivity));
+
+            var systemMessage = GeneratePrompt.SystemMessage();
+            var userMessage = GeneratePrompt.UserMessage(moodOrActivity);
+
+            var messages = new List<ChatMessage>
             {
-                { "бягане", new List<string> { "Eye of the Tiger", "Can't Stop - Red Hot Chili Peppers", "Run Boy Run" } },
-                { "релакс", new List<string> { "Weightless - Marconi Union", "River Flows in You - Yiruma", "Clair de Lune - Debussy" } },
-                { "фокус", new List<string> { "Lo-fi Beats", "Instrumental Jazz", "Focus - Apple Music" } }
+                new SystemChatMessage(systemMessage),
+                new UserChatMessage(userMessage)
             };
 
-            if (playlists.ContainsKey(moodOrActivity.ToLower()))
+            var response = await client.CompleteChatAsync(messages);
+            var responseText = response.Value.Content[0].Text;
+
+            var playlist = new Dictionary<string, string>();
+
+            var lines = responseText.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var line in lines)
             {
-                return playlists[moodOrActivity.ToLower()];
+                var parts = line.Split(new[] { " - " }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length == 2)
+                {
+                    var songName = parts[0].Trim();
+                    var artistName = parts[1].Trim();
+
+                    playlist[songName] = artistName;
+                }
             }
 
-            return new List<string> { "Няма налични плейлисти за това настроение." };
+            var result = new StringBuilder();
+            foreach (var entry in playlist)
+            {
+                result.AppendLine($"{entry.Key} - {entry.Value}");
+            }
+
+            return result.ToString();
         }
     }
 }
