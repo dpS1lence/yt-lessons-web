@@ -1,13 +1,16 @@
 ﻿
+using MongoDB.Driver;
 using MoodifyAPI.Contracts.Helpers;
+using PlaylistModel = MoodifyAPI.Models.Playlist;
 using OpenAI.Chat;
 using System.Text;
+using MoodifyAPI.Models;
 
 namespace MoodifyAPI.Services.Playlist
 {
-    public class PlaylistService(ChatClient client) : IPlaylistService
+    public class PlaylistService(ChatClient client, IMongoClient mongoClient) : IPlaylistService
     {
-        public async Task<string> GetPlaylistByMood(string moodOrActivity)
+        public async Task GetPlaylistByMood(string moodOrActivity)
         {
             ArgumentNullException.ThrowIfNull(nameof(moodOrActivity));
 
@@ -23,30 +26,40 @@ namespace MoodifyAPI.Services.Playlist
             var response = await client.CompleteChatAsync(messages);
             var responseText = response.Value.Content[0].Text;
 
-            var playlist = new Dictionary<string, string>();
+            var lines = responseText
+                .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
-            var lines = responseText.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var database = mongoClient.GetDatabase("moodify-v1");
+            var playlistsCollection = database.GetCollection<PlaylistModel>("playlists");
+            var songsCollection = database.GetCollection<Song>("songs");
+
+            var playlist = new PlaylistModel { Name = moodOrActivity };
+            var uniqueSongs = new HashSet<Song>();
 
             foreach (var line in lines)
             {
                 var parts = line.Split(new[] { " - " }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length != 2) continue;
 
-                if (parts.Length == 2)
+                string songName = parts[0].Trim();
+                string authorName = parts[1].Trim();
+
+                var song = new Song { Name = songName, Author = authorName };
+
+                var existingSong = await songsCollection.Find(s => s.Name == songName).FirstOrDefaultAsync();
+                if (existingSong != null)
                 {
-                    var songName = parts[0].Trim();
-                    var artistName = parts[1].Trim();
-
-                    playlist[songName] = artistName;
+                    uniqueSongs.Add(existingSong);
+                }
+                else
+                {
+                    await songsCollection.InsertOneAsync(song);
+                    uniqueSongs.Add(song);
                 }
             }
 
-            var result = new StringBuilder();
-            foreach (var entry in playlist)
-            {
-                result.AppendLine($"{entry.Key} - {entry.Value}");
-            }
-
-            return result.ToString();
+            playlist.Songs = uniqueSongs;
+            await playlistsCollection.InsertOneAsync(playlist);
         }
     }
 }

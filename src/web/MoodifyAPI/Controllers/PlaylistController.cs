@@ -10,9 +10,9 @@ namespace MoodifyAPI.Controllers
         [HttpGet("GetPlaylistByMood")]
         public async Task<IActionResult> GetPlaylistByMood(string mood)
         {
-            var playlist = await playlistService.GetPlaylistByMood(mood);
+            await playlistService.GetPlaylistByMood(mood);
 
-            return Ok(playlist);
+            return Ok();
         }
     }
 }
